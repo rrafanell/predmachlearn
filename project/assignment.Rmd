@@ -1,0 +1,172 @@
+---
+title: "Course project Writeup"
+author: "Roger Rafanell"
+date: "18 de agosto de 2015"
+output:
+  html_document:
+    pandoc_args: [
+      "+RTS", "-K128m",
+      "-RTS"
+    ]
+---
+
+Loading cleaning and pre-processing data
+------------------------------------------------
+
+Load the training dataset **pml-training.csv**:
+
+```{r}
+library(caret)
+library(ggplot2)
+
+set.seed(32343)
+setwd("/home/roger/Escritorio/ML_Course/assignment/")
+data <- read.csv('data/pml-training.csv', header=TRUE, sep=",")
+
+```
+
+
+After loading the training dataset, the first thing was inspect the dataset looking for *NA* values. The columns containing *NAs* have been removed:
+
+```{r}
+#Remove columns with NA
+data <- data[sapply(data, function(x) !any(is.na(x)))]
+```
+ 
+
+We have also discarded the columns that not explains the model so much, the ones with a near zero variance, as well as the ones contaning factors which are not directly related to the numerical input data collected by the sensors:
+
+```{r}
+# get indices of data.frame columns with low variance
+badCols <- nearZeroVar(data)
+
+# remove those "bad" columns from the data set
+data <- data[, -badCols]
+data$cvtd_timestamp <- NULL
+data$user_name <- NULL
+```
+
+
+The filtered dataset has been splitted in a training (75%) and testing (25%) subsets:
+
+```{r}
+inTrain <- createDataPartition(y = data$classe, p=0.75, list=FALSE)
+training <- data[inTrain, ]
+testing <- data[-inTrain, ]
+```
+
+
+In some cases, there is a need to use Principal Component Analysis (PCA) to transform the data to a smaller sub–space where the new variable are uncorrelated with one another. We performed this pre-processing technique in order to capture the features containing the 80% of the variance. 
+
+The *preProcess* method applies (in one call) Box-Cox transformation to correct for skewness, center and to scale each variable.
+
+```{r}
+# Pre-processing: Box-Cox transformation, centered, scaled and principal component signal extraction
+preProc <- preProcess(training[, -57], method=c("BoxCox", "center", "scale", "pca"), thresh= 0.80)
+trainPC <- predict(preProc, training[, -57])
+preProc
+```
+
+Note the PCA needed **15 components** to capture the desired variance theshold.
+
+Data Inspection
+----------------------------------------------------------------------------
+
+Some data inspection has been done in order to plot the features (using *featurePlot* method) by presenting some some different combinations of the Principal Components (PC) **[PC1-PC7]**, **[PC8-PC15]** and **[PC1, PC8-PC15]**. The following example depicts the exploration of the **[PC1-PC7]** pairs, where some clusters could be appreciated in the **[PC1-PC2]** and **[PC2, PC3-PC7]** regions.
+ 
+ <img class=center src=figs/PC1-PC7.png height=50>
+ 
+This could be understood as the *big picture*, and could be used to detect some interesting patterns hidden in the data.
+
+The following operations highlight the clustered regions:
+ 
+```{r}
+# Plotting some of the relevant principal component interactions
+qplot(PC1, PC2, data=trainPC, col=training$classe, xlab="PC1", ylab="PC2")
+qplot(PC6, PC2, data=trainPC, col=training$classe, xlab="PC6", ylab="PC2")
+```
+
+Fitting the model
+----------------------------------------------------------------------------
+
+Since we have found some interesting patterns, is time to train a **random forest** model. This is one of the most commonly used classification algorithm as well as the **boosting** family. The model has been resampled with 10-fold cross-validation and saved as an object to speed-up the load operations.
+
+```{r}
+# Fit the model with 10-fold cross validation
+## check if model exists? If not, refit:
+if(file.exists("model/modelRF.rda")) {
+    ## load model
+    load(file = "model/modelRF.rda")
+} else {
+    ## (re)fit the model and save it
+    train_control <- trainControl(method="cv", number=10)
+    modelFit <- train(training$classe ~ ., method="rf", data=trainPC, trControl=train_control, prox=TRUE)
+    save(modelFit, file = "model/modelRF.rda")
+}
+```
+
+```{r}
+modelFit
+```
+
+```{r}
+pred <- predict(modelFit, trainPC)
+confusionMatrix(pred, training$classe)
+```
+
+```{r}
+plot(main="Overall model error", modelFit$finalModel, log="y")
+```
+
+Testing the model
+----------------------------------------------------------------------------
+
+The model has been tested using a dedicated test. As it could be appreciated, the model predictions are not perfect but they are so close, reaching an *out-of-sample accuracy* of **0.977**. 
+
+```{r}
+# Apply the same PCA transformation to the testing set
+testPC <- predict(preProc, testing[, -57])
+```
+
+```{r}
+# Testing the predictor with the testing set
+pred <- predict(modelFit, testPC)
+confusionMatrix(testing$classe, pred)
+```
+
+The following figure describes the number of correct predictions *vs.* the incorrect ones. The **red** colour elements represent misclassified items whether the **green** represents correctly classified elements. The model exhibits a low classification error with new data. 
+
+```{r}
+# Plotting correct and incorrect predictions
+testPC$predRight <- pred==testing$classe
+qplot(PC1, PC2, colour=predRight, data=testPC, main="Newdata Prediction")
+```
+
+Validation 
+----------------------------------------------------------------------------------------------------
+
+Finally, the model has been validated against the data provided in the **pml-testing.csv** file:
+
+```{r}
+# Testing with validation data (20 samples) 
+validation <- read.csv('data/pml-testing.csv', header=TRUE, sep=",")
+
+# Remove columns with NAs
+validation <- validation[sapply(data, function(x) !any(is.na(x)))]
+
+# get indices of data.frame columns with low variance
+badCols <- nearZeroVar(validation)
+
+# remove those "bad" columns from the validation set
+validation <- validation[, -badCols]
+validation$cvtd_timestamp <- NULL
+validation$user_name <- NULL
+validationPC <- predict(preProc, validation[, -57])
+results <- predict(modelFit, validationPC)
+```
+
+Predicting the following results:
+
+```{r}
+results
+```
