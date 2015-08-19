@@ -2,7 +2,7 @@ library(caret)
 library(ggplot2)
 
 set.seed(32343)
-setwd("/home/roger/Escritorio/ML_Course/assignment/")
+setwd("/home/roger/Escritorio/predmachlearn/project/")
 data <- read.csv('data/pml-training.csv', header=TRUE, sep=",")
 
 #Remove columns with NA

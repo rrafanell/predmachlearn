@@ -20,7 +20,7 @@ library(caret)
 library(ggplot2)
 
 set.seed(32343)
-setwd("/home/roger/Escritorio/ML_Course/assignment/")
+setwd("/home/roger/Escritorio/predmachlearn/project/")
 data <- read.csv('data/pml-training.csv', header=TRUE, sep=",")
 
 ```
@@ -78,12 +78,11 @@ Some data inspection has been done in order to plot the features (using *feature
  
 This could be understood as the *big picture*, and could be used to detect some interesting patterns hidden in the data.
 
-The following operations highlight the clustered regions:
+The following operations highlight some of the most clustered regions:
  
 ```{r}
 # Plotting some of the relevant principal component interactions
 qplot(PC1, PC2, data=trainPC, col=training$classe, xlab="PC1", ylab="PC2")
-qplot(PC6, PC2, data=trainPC, col=training$classe, xlab="PC6", ylab="PC2")
 ```
 
 Fitting the model
@@ -134,7 +133,7 @@ pred <- predict(modelFit, testPC)
 confusionMatrix(testing$classe, pred)
 ```
 
-The following figure describes the number of correct predictions *vs.* the incorrect ones. The **red** colour elements represent misclassified items whether the **green** represents correctly classified elements. The model exhibits a low classification error with new data. 
+The following figure describes the number of correct predictions *vs.* the incorrect ones (outliers). The **red** colour elements represent misclassified items whether the **green** represents correctly classified elements. The model exhibits a low classification error with new data. 
 
 ```{r}
 # Plotting correct and incorrect predictions
